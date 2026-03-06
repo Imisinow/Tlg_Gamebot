@@ -4,13 +4,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #111; color: white; margin: 0; padding: 15px; }
-        .box { background: #222; padding: 10px; border-radius: 10px; margin-bottom: 10px; }
-        canvas { width: 280px; height: 280px; margin: 15px 0; }
-        button { width: 100%; padding: 15px; margin: 5px 0; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
-        .btn-spin { background: #0088cc; color: white; }
-        .btn-bonus { background: #f1c40f; color: black; }
-        .btn-withdraw { background: #e67e22; color: white; }
+        body { font-family: sans-serif; text-align: center; background: #111; color: white; padding: 10px; }
+        .box { background: #222; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #333; }
+        .btn { width: 100%; padding: 15px; margin: 5px 0; border: none; border-radius: 10px; font-weight: bold; }
+        .leaderboard-list { text-align: left; padding: 10px; }
+        .entry { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; }
+        #leaderboard-ui { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #111; z-index: 100; overflow-y: auto; }
     </style>
 </head>
 <body>
@@ -18,54 +17,50 @@
         🎰 Spins: <span id="spins">0</span> | 💎 TON: <span id="balance">0.00</span>
     </div>
 
-    <canvas id="wheel" width="600" height="600"></canvas>
+    <button class="btn" style="background:#0088cc;" onclick="spin()">SPIN WHEEL</button>
+    <button class="btn" style="background:#f1c40f; color:#000;" onclick="claim()">🎁 DAILY BONUS</button>
+    <button class="btn" style="background:#444;" onclick="showLeaderboard()">🏆 LEADERBOARD</button>
 
-    <button class="btn-spin" id="spin-btn" onclick="spin()">SPIN</button>
-    <button class="btn-bonus" id="bonus-btn" onclick="claimBonus()">🎁 CLAIM DAILY BONUS</button>
-    
-    <div class="box" style="margin-top: 20px;">
-        <input type="text" id="addr" placeholder="Wallet Address" style="width: 90%; padding: 10px; margin-bottom: 5px;">
-        <button class="btn-withdraw" onclick="withdraw()">WITHDRAW (Min 0.5)</button>
+    <div id="leaderboard-ui">
+        <h2>🏆 Top Players</h2>
+        <div id="list" class="leaderboard-list"></div>
+        <button class="btn" style="background:#e74c3c; width:80%;" onclick="document.getElementById('leaderboard-ui').style.display='none'">CLOSE</button>
     </div>
 
     <script>
         const API = "http://YOUR_VPS_IP:8000"; // CHANGE THIS
         const tg = window.Telegram.WebApp;
-        const uid = tg.initDataUnsafe.user.id;
+        const user = tg.initDataUnsafe.user || {id: 1, first_name: "Player"};
 
         async function load() {
-            const r = await fetch(`${API}/user/${uid}`);
+            const r = await fetch(`${API}/user/${user.id}?name=${user.first_name}`);
             const d = await r.json();
             document.getElementById('spins').innerText = d.spins;
             document.getElementById('balance').innerText = d.balance.toFixed(3);
-            document.getElementById('bonus-btn').style.display = d.bonus_available ? "block" : "none";
         }
 
-        async function claimBonus() {
-            const r = await fetch(`${API}/claim_daily/${uid}`, { method: 'POST' });
-            const d = await r.json();
-            alert(d.message || d.detail);
-            load();
+        async function showLeaderboard() {
+            const r = await fetch(`${API}/leaderboard`);
+            const data = await r.json();
+            let html = "";
+            data.forEach((u, i) => {
+                html += `<div class="entry"><span>${i+1}. ${u.name}</span> <b>${u.balance} TON</b></div>`;
+            });
+            document.getElementById('list').innerHTML = html;
+            document.getElementById('leaderboard-ui').style.display = 'block';
         }
 
         async function spin() {
-            const r = await fetch(`${API}/spin/${uid}`, { method: 'POST' });
+            const r = await fetch(`${API}/spin/${user.id}`, {method:'POST'});
             const d = await r.json();
-            if(d.detail) return alert(d.detail);
-            alert("Winning: " + d.win_label);
-            load();
+            if(d.win !== undefined) { alert("You won " + d.win + " TON!"); load(); }
+            else alert(d.detail);
         }
 
-        async function withdraw() {
-            const addr = document.getElementById('addr').value;
-            const r = await fetch(`${API}/withdraw`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: uid, address: addr})
-            });
-            const d = await r.json();
-            alert(d.status === "ok" ? "Request Sent!" : d.detail);
-            load();
+        async function claim() {
+            const r = await fetch(`${API}/claim_daily/${user.id}`, {method:'POST'});
+            if(r.ok) { alert("Bonus Claimed!"); load(); }
+            else alert("Come back later!");
         }
 
         load(); tg.expand();
