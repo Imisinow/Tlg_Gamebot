@@ -11,6 +11,7 @@ Step 2
 
 API (Backend): 
 Run the main.py (FastAPI/Flask) on Render.com or Termux. This holds the database.
+
 ​Bot Interface: Run the bot.py (above) on the same server.
 
 Step 3
