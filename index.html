@@ -1,116 +1,74 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spin & Earn TON</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://adsgram.ai/sdk.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #0f0f0f; color: white; margin: 0; padding: 20px; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .stat-box { background: #1e1e1e; padding: 10px; border-radius: 12px; border: 1px solid #333; }
-        #wheel-container { position: relative; width: 320px; margin: 20px auto; }
-        canvas { border-radius: 50%; border: 8px solid #222; width: 300px; height: 300px; }
-        #pointer { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); width: 0; height: 0; 
-                   border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 30px solid #0088cc; z-index: 10; }
-        button { background: #0088cc; color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; width: 100%; margin: 5px 0; cursor: pointer; }
-        #ad-btn { background: #28a745; }
-        #invite-btn { background: #6f42c1; }
+        body { font-family: sans-serif; text-align: center; background: #111; color: white; margin: 0; padding: 15px; }
+        .box { background: #222; padding: 10px; border-radius: 10px; margin-bottom: 10px; }
+        canvas { width: 280px; height: 280px; margin: 15px 0; }
+        button { width: 100%; padding: 15px; margin: 5px 0; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
+        .btn-spin { background: #0088cc; color: white; }
+        .btn-bonus { background: #f1c40f; color: black; }
+        .btn-withdraw { background: #e67e22; color: white; }
     </style>
 </head>
 <body>
-    <div class="stats-grid">
-        <div class="stat-box">🎰 Spins: <span id="spin-count">...</span></div>
-        <div class="stat-box">💎 TON: <span id="balance">...</span></div>
+    <div class="box">
+        🎰 Spins: <span id="spins">0</span> | 💎 TON: <span id="balance">0.00</span>
     </div>
 
-    <div id="wheel-container">
-        <div id="pointer"></div>
-        <canvas id="wheel" width="600" height="600"></canvas>
-    </div>
+    <canvas id="wheel" width="600" height="600"></canvas>
 
-    <button id="spin-btn" onclick="spinWheel()">SPIN NOW</button>
-    <button id="ad-btn" onclick="showAd()">📺 Watch Ad (+1 Spin)</button>
-    <button id="invite-btn" onclick="inviteFriends()">🤝 Invite Friends (+3 Spins)</button>
+    <button class="btn-spin" id="spin-btn" onclick="spin()">SPIN</button>
+    <button class="btn-bonus" id="bonus-btn" onclick="claimBonus()">🎁 CLAIM DAILY BONUS</button>
+    
+    <div class="box" style="margin-top: 20px;">
+        <input type="text" id="addr" placeholder="Wallet Address" style="width: 90%; padding: 10px; margin-bottom: 5px;">
+        <button class="btn-withdraw" onclick="withdraw()">WITHDRAW (Min 0.5)</button>
+    </div>
 
     <script>
-        const API_URL = "http://YOUR_VPS_IP:8000"; // CHANGE THIS TO YOUR VPS IP
+        const API = "http://YOUR_VPS_IP:8000"; // CHANGE THIS
         const tg = window.Telegram.WebApp;
-        const user = tg.initDataUnsafe.user || { id: 12345, first_name: "Test" };
-        
-        let spins = 0, balance = 0, isSpinning = false, rotation = 0;
-        const sectors = ["0.01", "0", "0.05", "JACKPOT", "0.02", "0"];
-        const colors = ["#f1c40f", "#e74c3c", "#9b59b6", "#f39c12", "#2ecc71", "#34495e"];
+        const uid = tg.initDataUnsafe.user.id;
 
-        async function loadData() {
-            const res = await fetch(`${API_URL}/user/${user.id}`);
-            const data = await res.json();
-            spins = data.spins; balance = data.balance;
-            updateUI();
+        async function load() {
+            const r = await fetch(`${API}/user/${uid}`);
+            const d = await r.json();
+            document.getElementById('spins').innerText = d.spins;
+            document.getElementById('balance').innerText = d.balance.toFixed(3);
+            document.getElementById('bonus-btn').style.display = d.bonus_available ? "block" : "none";
         }
 
-        function updateUI() {
-            document.getElementById('spin-count').innerText = spins;
-            document.getElementById('balance').innerText = balance.toFixed(3);
-            document.getElementById('spin-btn').disabled = spins <= 0;
+        async function claimBonus() {
+            const r = await fetch(`${API}/claim_daily/${uid}`, { method: 'POST' });
+            const d = await r.json();
+            alert(d.message || d.detail);
+            load();
         }
 
-        function drawWheel() {
-            const canvas = document.getElementById('wheel');
-            const ctx = canvas.getContext('2d');
-            const arc = 2 * Math.PI / sectors.length;
-            ctx.clearRect(0,0,600,600);
-            sectors.forEach((text, i) => {
-                ctx.beginPath(); ctx.fillStyle = colors[i]; ctx.moveTo(300, 300);
-                ctx.arc(300, 300, 300, i * arc, (i+1) * arc); ctx.fill();
-                ctx.save(); ctx.translate(300, 300); ctx.rotate(i * arc + arc/2);
-                ctx.textAlign = "right"; ctx.fillStyle = "white"; ctx.font = "bold 30px Arial";
-                ctx.fillText(text, 280, 10); ctx.restore();
+        async function spin() {
+            const r = await fetch(`${API}/spin/${uid}`, { method: 'POST' });
+            const d = await r.json();
+            if(d.detail) return alert(d.detail);
+            alert("Winning: " + d.win_label);
+            load();
+        }
+
+        async function withdraw() {
+            const addr = document.getElementById('addr').value;
+            const r = await fetch(`${API}/withdraw`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: uid, address: addr})
             });
+            const d = await r.json();
+            alert(d.status === "ok" ? "Request Sent!" : d.detail);
+            load();
         }
 
-        async function spinWheel() {
-            if (isSpinning || spins <= 0) return;
-            isSpinning = true;
-            
-            // 1. Get result from Backend FIRST (Anti-Cheat)
-            const res = await fetch(`${API_URL}/spin/${user.id}`, { method: 'POST' });
-            const data = await res.json();
-            
-            // 2. Animate
-            const targetSector = sectors.indexOf(data.win_label);
-            const extraDeg = (360 - (targetSector * (360/6))) + 1440;
-            rotation += extraDeg;
-            document.getElementById('wheel').style.transition = "transform 4s cubic-bezier(0.15, 0, 0.15, 1)";
-            document.getElementById('wheel').style.transform = `rotate(${rotation}deg)`;
-
-            setTimeout(() => {
-                isSpinning = false;
-                spins = data.new_spins; balance = data.new_balance;
-                updateUI();
-                tg.HapticFeedback.notificationOccurred('success');
-            }, 4000);
-        }
-
-        function inviteFriends() {
-            const link = `https://t.me/YOUR_BOT_USERNAME?start=${user.id}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me and earn TON!`);
-        }
-
-        // Adsgram Integration
-        const AdController = window.Adsgram.init({ blockId: "YOUR_BLOCK_ID" });
-        async function showAd() {
-            try {
-                const result = await AdController.show();
-                if (result.done) {
-                    await fetch(`${API_URL}/add_spin/${user.id}`, { method: 'POST' });
-                    loadData();
-                }
-            } catch (e) { console.error(e); }
-        }
-
-        drawWheel(); loadData(); tg.expand();
+        load(); tg.expand();
     </script>
 </body>
 </html>
